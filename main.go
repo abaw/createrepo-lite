@@ -14,12 +14,13 @@ type RPMInfo struct {
 }
 
 func ParseRPMInfo(ts rpmts, path string) (RPMInfo, error) {
-	header, err := OpenRPM(ts, path)
+	header, err := openRPM(ts, path)
 	if err != nil {
 		return RPMInfo{}, err
 	}
+	defer header.close()
 
-	name, err := header.GetString(rpmtagName)
+	name, err := header.getString(rpmtagName)
 	if err != nil {
 		return RPMInfo{}, err
 	}
