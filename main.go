@@ -9,30 +9,30 @@ import "strings"
 import "golang.org/x/net/context"
 
 // hold necessary information to create metadata
-type RPMInfo struct {
+type rpmInfo struct {
 	Name string
 }
 
-func ParseRPMInfo(ts rpmts, path string) (RPMInfo, error) {
-	header, err := openRPM(ts, path)
+func ParseRPMInfo(ts rpmts, path string) (rpmInfo, error) {
+	header, err := ts.openRPM(path)
 	if err != nil {
-		return RPMInfo{}, err
+		return rpmInfo{}, err
 	}
 	defer header.close()
 
-	name, err := header.getString(rpmtagName)
+	name, err := header.getString("name")
 	if err != nil {
-		return RPMInfo{}, err
+		return rpmInfo{}, err
 	}
-	return RPMInfo{Name: name}, nil
+	return rpmInfo{Name: name}, nil
 }
 
-func parseRPMFiles(ctx context.Context, in <-chan string) <-chan RPMInfo {
-	out := make(chan RPMInfo)
+func parseRPMFiles(ctx context.Context, in <-chan string) <-chan rpmInfo {
+	out := make(chan rpmInfo)
 
 	go func() {
 		ts := newTS()
-		defer freeTS(ts)
+		defer ts.close()
 		defer close(out)
 		for path := range in {
 			select {
