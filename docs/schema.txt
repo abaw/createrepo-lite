@@ -1,0 +1,29 @@
+primary database
+----------------
+<table packages>
+pkgKey INTEGER PRIMARY KEY : row id
+pkgId TEXT                 : sha256 sum of RPM file
+name TEXT                  : %{name}
+arch TEXT                  : %{arch}
+version TEXT               : %{version}
+epoch TEXT                 : %{epoch}
+release TEXT               : %{release}
+summary TEXT               : %{summary}.strip()
+description TEXT           : %{description}.strip()
+url TEXT                   : %{url} URL of the project, nullable
+time_file INTEGER          : file creation time
+time_build INTEGER         : %{buildtime}
+rpm_license TEXT           : %{license}, nullable
+rpm_vendor TEXT            : %{vendor}, nullable
+rpm_group TEXT             : %{group}, nullable
+rpm_buildhost TEXT         : %{buildhost}, nullable
+rpm_sourcerpm TEXT         : %{sourcerpm}, nullable
+rpm_header_start INTEGER   : byte offset where the header starts
+rpm_header_end INTEGER     : byte offset where the header ends
+rpm_packager TEXT          : %{packager}, nullable
+size_package INTEGER       : file size of RPM
+size_installed INTEGER     : %{size}
+size_archive INTEGER       : %{archivesize}
+location_href TEXT         : related path to the RPM file
+location_base TEXT         : simply null is sufficient
+checksum_type TEXT         : "sha256"
