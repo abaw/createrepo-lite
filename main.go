@@ -27,8 +27,8 @@ func ParseRPMInfo(ts rpmts, path string) (rpmInfo, error) {
 	return rpmInfo{Name: name}, nil
 }
 
-func parseRPMFiles(ctx context.Context, in <-chan string) <-chan rpmInfo {
-	out := make(chan rpmInfo)
+func parseRPMFiles(ctx context.Context, in <-chan string) <-chan *packageInfo {
+	out := make(chan *packageInfo)
 
 	go func() {
 		ts := newTS()
@@ -39,7 +39,7 @@ func parseRPMFiles(ctx context.Context, in <-chan string) <-chan rpmInfo {
 			case <-ctx.Done():
 				return
 			default:
-				info, err := ParseRPMInfo(ts, path)
+				info, err := ts.parsePackageInfo(path)
 				if err != nil {
 					continue
 				}
@@ -66,7 +66,7 @@ func findRPMFiles(ctx context.Context, dir string) <-chan string {
 				return err
 			}
 
-			canceled := func () error {
+			canceled := func() error {
 				return errors.New(fmt.Sprintf("finding RPM files in %s canceled", dir))
 			}
 
@@ -105,6 +105,6 @@ func main() {
 	out := parseRPMFiles(ctx, files)
 
 	for info := range out {
-		log.Println(info.Name)
+		log.Printf("%s:%s, <%d,%d>", info.path, info.checksum, info.headerStart, info.headerEnd)
 	}
 }

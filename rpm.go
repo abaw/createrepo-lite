@@ -10,6 +10,8 @@ import "C"
 import "unsafe"
 import "errors"
 import "fmt"
+import "os"
+import "encoding/binary"
 
 type rpmts struct {
 	ts C.rpmts
@@ -29,8 +31,10 @@ func (ts rpmts) close() {
 }
 
 type rpmheader struct {
-	header C.Header
-	path string
+	header      C.Header
+	path        string
+	startOffset *uint64
+	endOffset   *uint64
 }
 
 // openRPM open a RPM file and returns a rpmheader object where you could do various RPM related operations on.
@@ -39,7 +43,7 @@ func (ts rpmts) openRPM(path string) (*rpmheader, error) {
 	defer C.free(unsafe.Pointer(cPath))
 	cMode := C.CString("r")
 	defer C.free(unsafe.Pointer(cMode))
-	header := rpmheader{ path: path }
+	header := rpmheader{path: path}
 
 	fd := C.Fopen(cPath, cMode)
 	// FIXME: handle error
@@ -61,8 +65,8 @@ func (header *rpmheader) close() {
 
 type rpmtag struct {
 	header *rpmheader
-	name string
-	value C.rpmTagVal
+	name   string
+	value  C.rpmTagVal
 }
 
 // getTag returns a rpmtag object for the given tag name
@@ -120,8 +124,112 @@ func (header *rpmheader) getNumber(tagName string) (uint64, error) {
 	return tag.getNumber()
 }
 
-// getHeaderRange return the byte range of the header in the RPM file as (startOffset, endOffset)
-func (header *rpmheader) getHeaderRange() (uint64, uint64) {
-	return 0, 0
+// getHeaderRange return the byte range of the header in the RPM file as
+// (startOffset, endOffset, nil). It returns a non-nil error on errors
+func (header *rpmheader) getHeaderRange() (uint64, uint64, error) {
+	if header.startOffset != nil && header.endOffset != nil {
+		return *header.startOffset, *header.endOffset, nil
+	}
+
+	file, err := os.Open(header.path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer file.Close()
+
+	if _, err = file.Seek(104, 0); err != nil {
+		return 0, 0, err
+	}
+
+	var sigIndex uint32
+	if err = binary.Read(file, binary.BigEndian, &sigIndex); err != nil {
+		return 0, 0, err
+	}
+
+	var sigData uint32
+	if err = binary.Read(file, binary.BigEndian, &sigData); err != nil {
+		return 0, 0, err
+	}
+
+	sigIndexSize := sigIndex * 16
+	sigSize := sigData + sigIndexSize
+	startOffset := uint64(112 + sigSize)
+	header.startOffset = &startOffset
+	if distToBoundary := sigSize % 8; distToBoundary != 0 {
+		*header.startOffset += uint64(8 - distToBoundary)
+	}
+
+	if _, err = file.Seek(int64(*header.startOffset)+8, 0); err != nil {
+		return 0, 0, err
+	}
+
+	var hdrIndex uint32
+	if err = binary.Read(file, binary.BigEndian, &hdrIndex); err != nil {
+		return 0, 0, err
+	}
+
+	var hdrData uint32
+	if err = binary.Read(file, binary.BigEndian, &hdrData); err != nil {
+		return 0, 0, err
+	}
+	hdrIndexSize := hdrIndex * 16
+	hdrSize := hdrData + hdrIndexSize + 16
+	endOffset := *header.startOffset + uint64(hdrSize)
+	header.endOffset = &endOffset
+
+	return *header.startOffset, *header.endOffset, nil
 }
 
+/* For how to get header start/end
+   def _get_header_byte_range(self):
+       """takes an rpm file or fileobject and returns byteranges for location of the header"""
+       if self._hdrstart and self._hdrend:
+           return (self._hdrstart, self._hdrend)
+
+
+       fo = open(self.localpath, 'r')
+       #read in past lead and first 8 bytes of sig header
+       fo.seek(104)
+       # 104 bytes in
+       binindex = fo.read(4)
+       # 108 bytes in
+       (sigindex, ) = struct.unpack('>I', binindex)
+       bindata = fo.read(4)
+       # 112 bytes in
+       (sigdata, ) = struct.unpack('>I', bindata)
+       # each index is 4 32bit segments - so each is 16 bytes
+       sigindexsize = sigindex * 16
+       sigsize = sigdata + sigindexsize
+       # we have to round off to the next 8 byte boundary
+       disttoboundary = (sigsize % 8)
+       if disttoboundary != 0:
+           disttoboundary = 8 - disttoboundary
+       # 112 bytes - 96 == lead, 8 = magic and reserved, 8 == sig header data
+       hdrstart = 112 + sigsize  + disttoboundary
+
+       fo.seek(hdrstart) # go to the start of the header
+       fo.seek(8,1) # read past the magic number and reserved bytes
+
+       binindex = fo.read(4)
+       (hdrindex, ) = struct.unpack('>I', binindex)
+       bindata = fo.read(4)
+       (hdrdata, ) = struct.unpack('>I', bindata)
+
+       # each index is 4 32bit segments - so each is 16 bytes
+       hdrindexsize = hdrindex * 16
+       # add 16 to the hdrsize to account for the 16 bytes of misc data b/t the
+       # end of the sig and the header.
+       hdrsize = hdrdata + hdrindexsize + 16
+
+       # header end is hdrstart + hdrsize
+       hdrend = hdrstart + hdrsize
+       fo.close()
+       self._hdrstart = hdrstart
+       self._hdrend = hdrend
+
+       return (hdrstart, hdrend)
+
+   hdrend = property(fget=lambda self: self._get_header_byte_range()[1])
+   hdrstart = property(fget=lambda self: self._get_header_byte_range()[0])
+
+*/
