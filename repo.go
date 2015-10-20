@@ -123,7 +123,7 @@ type packageInfo struct {
 	rpmVendor    *string
 	rpmGroup     *string
 	rpmBuildHost *string
-	rpmSourcerpm *string
+	rpmSourceRpm *string
 	rpmPackager  *string
 	// rpmInstallSize is %{size}
 	rpmInstallSize uint64
@@ -136,6 +136,13 @@ func (ts rpmts) parsePackageInfo(path string) (*packageInfo, error) {
 	var err error
 
 	info.path = path
+
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	info.fileTime = uint32(fileInfo.ModTime().Unix())
+	info.fileSize = uint64(fileInfo.Size())
 
 	info.checksumType = "sha256"
 	info.checksum, err = calcFileSha256Sum(path)
@@ -152,6 +159,83 @@ func (ts rpmts) parsePackageInfo(path string) (*packageInfo, error) {
 	info.headerStart, info.headerEnd, err = hdr.getHeaderRange()
 	if err != nil {
 		return nil, err
+	}
+
+	info.rpmName, err = hdr.getString("name")
+	if err != nil {
+		return nil, err
+	}
+
+	info.rpmArch, err = hdr.getString("arch")
+	if err != nil {
+		return nil, err
+	}
+
+	info.rpmVersion, err = hdr.getString("version")
+	if err != nil {
+		return nil, err
+	}
+
+	info.rpmEpoch, err = hdr.getString("epoch")
+	if err != nil {
+		// RPM spec states that we could omit Epoch, but createrepo
+		// actually use "0" as the default value if Epoch is not present
+		// in a RPM.
+		info.rpmEpoch = "0"
+	}
+
+	info.rpmRelease, err = hdr.getString("release")
+	if err != nil {
+		return nil, err
+	}
+
+	info.rpmSummary, err = hdr.getString("summary")
+	if err != nil {
+		return nil, err
+	}
+
+	info.rpmDescription, err = hdr.getString("description")
+	if err != nil {
+		return nil, err
+	}
+
+	rpmUrl, err := hdr.getString("url")
+	if err == nil {
+		info.rpmUrl = &rpmUrl
+	}
+
+	rpmBuildTime, err := hdr.getNumber("buildtime")
+	if err != nil {
+		return nil, err
+	}
+	info.rpmBuildTime = uint32(rpmBuildTime)
+
+	rpmLicense, err := hdr.getString("license")
+	if err == nil {
+		info.rpmLicense = &rpmLicense
+	}
+
+	rpmVendor, err := hdr.getString("vendor")
+	if err == nil {
+		info.rpmVendor = &rpmVendor
+	}
+
+	rpmGroup, err := hdr.getString("group")
+	if err == nil {
+		info.rpmGroup = &rpmGroup
+	}
+
+	rpmBuildHost, err := hdr.getString("buildhost")
+	if err == nil {
+		info.rpmBuildHost = &rpmBuildHost
+	}
+	rpmSourceRpm, err := hdr.getString("sourcerpm")
+	if err == nil {
+		info.rpmSourceRpm = &rpmSourceRpm
+	}
+	rpmPackager, err := hdr.getString("packager")
+	if err == nil {
+		info.rpmPackager = &rpmPackager
 	}
 
 	return &info, nil
