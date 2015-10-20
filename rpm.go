@@ -39,6 +39,10 @@ type rpmheader struct {
 
 // openRPM open a RPM file and returns a rpmheader object where you could do various RPM related operations on.
 func (ts rpmts) openRPM(path string) (*rpmheader, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	cMode := C.CString("r")
@@ -97,7 +101,7 @@ func (tag rpmtag) getNumber() (uint64, error) {
 	var td C.struct_rpmtd_s
 
 	ret := C.headerGet(tag.header.header, tag.value, &td, C.HEADERGET_EXT)
-	if ret != 0 || C.rpmtdCount(&td) != 1 {
+	if ret == 0 || C.rpmtdCount(&td) != 1 {
 		return 0, errors.New(fmt.Sprintf("not found tag(%s) in header.", tag.name))
 	}
 
