@@ -10,7 +10,7 @@ func TestKnownRPMTags(t *testing.T) {
 
 	hdr, err := ts.openRPM("openssl.rpm")
 	if err != nil {
-		t.Error("openRPM() failed: %s", err.Error())
+		t.Fatal("openRPM() failed: %s", err.Error())
 	}
 	defer hdr.close()
 
@@ -28,7 +28,6 @@ func TestKnownRPMTags(t *testing.T) {
 		t.Error("%name has a wrong value:", name)
 	}
 }
-
 
 func TestOpenFailure(t *testing.T) {
 	ts := newTS()

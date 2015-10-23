@@ -3,13 +3,15 @@ package main
 import (
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
+	"path/filepath"
 )
 
-import "fmt"
-import "errors"
-import "io"
-import "os"
-import "crypto/sha256"
+import (
+	"crypto/sha256"
+	"fmt"
+	"io"
+	"os"
+)
 
 // SQL for initializing databases are copied from createrepo/__init__.py
 const (
@@ -97,6 +99,7 @@ type repository struct {
 
 // packageInfo hold the necessary information for a RPM package to create metadata database
 type packageInfo struct {
+	// path is the absolute path to the RPM
 	path string
 	// checksum is the checksum of the RPM package
 	checksum string
@@ -135,7 +138,10 @@ func (ts rpmts) parsePackageInfo(path string) (*packageInfo, error) {
 	var info packageInfo
 	var err error
 
-	info.path = path
+	info.path, err = filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
 
 	fileInfo, err := os.Stat(path)
 	if err != nil {
@@ -238,9 +244,17 @@ func (ts rpmts) parsePackageInfo(path string) (*packageInfo, error) {
 		info.rpmPackager = &rpmPackager
 	}
 
-	return &info, nil
+	info.rpmInstallSize, err = hdr.getNumber("size")
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, errors.New("Not implemented yet")
+	info.rpmArchiveSize, err = hdr.getNumber("archivesize")
+	if err != nil {
+		return nil, err
+	}
+
+	return &info, nil
 }
 
 // calcFileSha256Sum returns a string(hex) representation of the sha256 checksum of a file
